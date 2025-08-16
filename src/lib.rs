@@ -68,6 +68,14 @@ impl Frame {
 
         4 + self.frame_header.len + data_blocks_len + content_checksum_len
     }
+
+    fn decode(self) -> Vec<u8> {
+        self.data_blocks
+            .into_iter()
+            .map(|block| block.decode())
+            .flatten()
+            .collect()
+    }
 }
 
 #[derive(Debug)]
@@ -218,7 +226,7 @@ impl FrameHeader {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 enum BlockType {
     Raw,
     Rle,
@@ -240,7 +248,7 @@ impl BlockHeader {
     }
 
     fn block_type(&self) -> BlockType {
-        let flag = (self.0[2] >> 1) & 0b11;
+        let flag = (self.0[0] >> 1) & 0b11;
         match flag {
             0 => BlockType::Raw,
             1 => BlockType::Rle,
@@ -266,6 +274,15 @@ struct Block {
 impl Block {
     fn from_bytes(bytes: &[u8]) -> Res<Self> {
         let block_header = BlockHeader::from_bytes(bytes[..3].try_into()?);
+
+        if block_header.block_type() == BlockType::Rle {
+            let block_content = vec![bytes[3]];
+            return Ok(Self {
+                block_header,
+                block_content,
+            });
+        }
+
         let block_content = bytes[3..3 + block_header.block_size() as usize]
             .iter()
             .map(|b| *b)
@@ -279,6 +296,15 @@ impl Block {
 
     fn len(&self) -> usize {
         3 + self.block_content.len()
+    }
+
+    fn decode(self) -> Vec<u8> {
+        match self.block_header.block_type() {
+            BlockType::Raw => self.block_content,
+            BlockType::Rle => vec![self.block_content[0]; self.block_header.block_size() as usize],
+            BlockType::Reserved => panic!("Impossible reserved block type"),
+            BlockType::Compressed => todo!(),
+        }
     }
 }
 
@@ -295,16 +321,20 @@ impl Zstd {
             let frame = Frame::from_bytes(&bytes)?;
             bytes = &bytes[frame.len()..];
             frames.push(frame);
-            dbg!(bytes);
         }
 
         Ok(Self { frames })
     }
 
     pub fn encode(bytes: Vec<u8>) -> Vec<u8> {
-        vec![]
+        todo!();
     }
-    pub fn decode(&self) -> Vec<u8> {
-        vec![]
+
+    pub fn decode(self) -> Vec<u8> {
+        self.frames
+            .into_iter()
+            .map(|frame| frame.decode())
+            .flatten()
+            .collect()
     }
 }

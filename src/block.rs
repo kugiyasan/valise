@@ -1,6 +1,7 @@
 use log::debug;
 
 use crate::Res;
+use crate::compressed_block::CompressedBlock;
 
 #[derive(Debug, PartialEq, Eq)]
 enum BlockType {
@@ -87,7 +88,10 @@ impl Block {
             BlockType::Raw => self.block_content,
             BlockType::Rle => vec![self.block_content[0]; self.block_header.block_size() as usize],
             BlockType::Reserved => panic!("Impossible reserved block type"),
-            BlockType::Compressed => todo!(),
+            BlockType::Compressed => {
+                let compressed_block = CompressedBlock::from_bytes(&self.block_content);
+                todo!();
+            }
         }
     }
 }

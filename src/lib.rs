@@ -1,12 +1,12 @@
 // https://datatracker.ietf.org/doc/html/rfc8878#name-compression-algorithm
 
 mod block;
+mod compressed_block;
 mod frame;
 
 use crate::frame::Frame;
-use std::error::Error;
 
-pub type Res<T> = Result<T, Box<dyn Error>>;
+pub type Res<T> = Result<T, Box<dyn std::error::Error>>;
 
 pub struct Zstd {
     frames: Vec<Frame>,

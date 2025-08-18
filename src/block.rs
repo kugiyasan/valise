@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::Res;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -13,7 +15,15 @@ pub struct BlockHeader([u8; 3]);
 
 impl BlockHeader {
     fn from_bytes(bytes: [u8; 3]) -> Self {
-        Self(bytes)
+        let s = Self(bytes);
+
+        debug!(
+            "is_last_block {}, block_type {:?}, block_size {}",
+            s.is_last_block(),
+            s.block_type(),
+            s.block_size()
+        );
+        s
     }
 
     pub fn is_last_block(&self) -> bool {

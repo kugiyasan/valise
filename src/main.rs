@@ -23,6 +23,8 @@ struct EncodeOrDecode {
 }
 
 fn main() -> Res<()> {
+    env_logger::init();
+
     let mut cli = Cli::parse();
     let input_bytes = fs::read(&cli.input_path)?;
 

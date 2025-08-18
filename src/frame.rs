@@ -1,3 +1,5 @@
+use log::debug;
+
 use crate::Res;
 use crate::block::Block;
 
@@ -13,6 +15,7 @@ pub struct Frame {
 impl Frame {
     pub fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
         let magic_number = u32::from_le_bytes(bytes[0..4].try_into()?);
+        debug!("magic_number {:x?}", &bytes[..4]);
         bytes = &bytes[4..];
 
         if magic_number != MAGIC_NUMBER {
@@ -20,11 +23,13 @@ impl Frame {
         }
 
         let frame_header = FrameHeader::from_bytes(bytes)?;
+        debug!("frame_header {:x?}", &bytes[..frame_header.len]);
         bytes = &bytes[frame_header.len..];
 
         let mut data_blocks = vec![];
         loop {
             let block = Block::from_bytes(bytes)?;
+            debug!("block {:x?}", &bytes[..block.len()]);
             bytes = &bytes[block.len()..];
             let is_last_block = block.block_header.is_last_block();
 
@@ -36,6 +41,7 @@ impl Frame {
         }
 
         let content_checksum = if frame_header.frame_header_descriptor.content_checksum_flag() {
+            debug!("content_checksum {:x?}", &bytes[..4]);
             Some(u32::from_le_bytes(bytes[..4].try_into()?))
         } else {
             None

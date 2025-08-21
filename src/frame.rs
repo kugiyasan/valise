@@ -15,7 +15,7 @@ pub struct Frame {
 impl Frame {
     pub fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
         let magic_number = u32::from_le_bytes(bytes[0..4].try_into()?);
-        debug!("magic_number {:x?}", &bytes[..4]);
+        debug!("magic_number {:02x?}", &bytes[..4]);
         bytes = &bytes[4..];
 
         if magic_number != MAGIC_NUMBER {
@@ -39,7 +39,7 @@ impl Frame {
         }
 
         let content_checksum = if frame_header.frame_header_descriptor.content_checksum_flag() {
-            debug!("content_checksum {:x?}", &bytes[..4]);
+            debug!("content_checksum {:02x?}", &bytes[..4]);
             Some(u32::from_le_bytes(bytes[..4].try_into()?))
         } else {
             None
@@ -200,7 +200,7 @@ impl FrameHeader {
             len: index,
         };
 
-        debug!("frame_header {:x?}", &bytes[..frame_header.len]);
+        debug!("frame_header {:02x?}", &bytes[..frame_header.len]);
         Ok(frame_header)
     }
 

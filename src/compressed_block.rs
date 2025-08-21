@@ -11,7 +11,7 @@ pub struct CompressedBlock {
 impl CompressedBlock {
     pub fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
         let literals_section = LiteralsSection::from_bytes(bytes)?;
-        debug!("LiteralsSection {:x?}", &bytes[..literals_section.len()]);
+        debug!("LiteralsSection {:02x?}", &bytes[..literals_section.len()]);
         bytes = &bytes[literals_section.len()..];
 
         let sequences_section = SequencesSection::from_bytes(bytes)?;
@@ -109,7 +109,7 @@ impl LiteralsSectionHeader {
     pub fn from_bytes(bytes: &[u8]) -> Res<Self> {
         let s = Self::_from_bytes(bytes);
 
-        debug!("literal_section_header {:x?}", &bytes[..s.header_len]);
+        debug!("literal_section_header {:02x?}", &bytes[..s.header_len]);
         debug!(
             "{:?}, size_format {:?}, {:?}",
             Self::literals_block_type(bytes[0]),
@@ -192,7 +192,7 @@ impl SequencesSection {
     fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
         let sequences_section_header = SequencesSectionHeader::from_bytes(bytes)?;
         debug!(
-            "sequences_section_header {:x?}",
+            "sequences_section_header {:02x?}",
             &bytes[..sequences_section_header.len()]
         );
         debug!("{:?}", sequences_section_header);
@@ -224,7 +224,7 @@ impl SequencesSection {
 
         for _ in 0..sequences_section_header.number_of_sequences {}
 
-        todo!("{:x?}", bytes);
+        todo!("{:02x?}", bytes);
     }
 
     fn literals_length_code(literals_length_code: u8) -> (u32, u8) {

@@ -18,7 +18,7 @@ impl BlockHeader {
     fn from_bytes(bytes: [u8; 3]) -> Self {
         let s = Self(bytes);
 
-        debug!("block_header {:x?}", &bytes[..3]);
+        debug!("block_header {:02x?}", &bytes[..3]);
         debug!(
             "is_last_block {}, block_type {:?}, block_size {}",
             s.is_last_block(),
@@ -78,7 +78,7 @@ impl Block {
             block_header,
             block_content,
         };
-        debug!("block {:x?}", &bytes[..s.len()]);
+        debug!("block {:02x?}", &bytes[..s.len()]);
 
         Ok(s)
     }

@@ -18,6 +18,7 @@ impl BlockHeader {
     fn from_bytes(bytes: [u8; 3]) -> Self {
         let s = Self(bytes);
 
+        debug!("block_header {:x?}", &bytes[..3]);
         debug!(
             "is_last_block {}, block_type {:?}, block_size {}",
             s.is_last_block(),
@@ -73,10 +74,13 @@ impl Block {
             .map(|b| *b)
             .collect();
 
-        Ok(Self {
+        let s = Self {
             block_header,
             block_content,
-        })
+        };
+        debug!("block {:x?}", &bytes[..s.len()]);
+
+        Ok(s)
     }
 
     pub fn len(&self) -> usize {

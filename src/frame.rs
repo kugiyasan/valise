@@ -23,13 +23,11 @@ impl Frame {
         }
 
         let frame_header = FrameHeader::from_bytes(bytes)?;
-        debug!("frame_header {:x?}", &bytes[..frame_header.len]);
         bytes = &bytes[frame_header.len..];
 
         let mut data_blocks = vec![];
         loop {
             let block = Block::from_bytes(bytes)?;
-            debug!("block {:x?}", &bytes[..block.len()]);
             bytes = &bytes[block.len()..];
             let is_last_block = block.block_header.is_last_block();
 
@@ -202,6 +200,7 @@ impl FrameHeader {
             len: index,
         };
 
+        debug!("frame_header {:x?}", &bytes[..frame_header.len]);
         Ok(frame_header)
     }
 

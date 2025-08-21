@@ -2,6 +2,20 @@ use log::debug;
 
 use crate::Res;
 
+const LITERALS_LENGTH_DEFAULT_DISTRIBUTION: [i8; 36] = [
+    4, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 1, 1, 1, 1, 1,
+    -1, -1, -1, -1,
+];
+
+const MATCH_LENGTHS_DEFAULT_DISTRIBUTION: [i8; 53] = [
+    1, 4, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1,
+];
+
+const OFFSET_CODES_DEFAULT_DISTRIBUTION: [i8; 29] = [
+    1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1,
+];
+
 #[derive(Debug)]
 pub struct CompressedBlock {
     literals_section: LiteralsSection,
@@ -9,8 +23,12 @@ pub struct CompressedBlock {
 }
 
 impl CompressedBlock {
-    pub fn from_bytes(bytes: &[u8]) -> Res<Self> {
-        let literals_section = LiteralsSection::from_bytes(bytes);
+    pub fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
+        let literals_section = LiteralsSection::from_bytes(bytes)?;
+        debug!("LiteralsSection {:x?}", &bytes[..literals_section.len()]);
+        bytes = &bytes[literals_section.len()..];
+
+        let sequences_section = SequencesSection::from_bytes(bytes)?;
         todo!();
     }
 }
@@ -180,4 +198,205 @@ impl LiteralsSectionHeader {
 }
 
 #[derive(Debug)]
-struct SequencesSection {}
+struct SequencesSection {
+    sequences_section_header: SequencesSectionHeader,
+}
+
+impl SequencesSection {
+    fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
+        let sequences_section_header = SequencesSectionHeader::from_bytes(bytes)?;
+        debug!(
+            "sequences_section_header {:x?}",
+            &bytes[..sequences_section_header.len()]
+        );
+        debug!("{:?}", sequences_section_header);
+        bytes = &bytes[sequences_section_header.len()..];
+
+        if sequences_section_header
+            .symbol_compression_modes
+            .literal_lengths_mode()
+            != CompressionMode::PredefinedMode
+        {
+            todo!();
+        }
+
+        if sequences_section_header
+            .symbol_compression_modes
+            .offsets_mode()
+            != CompressionMode::PredefinedMode
+        {
+            todo!();
+        }
+
+        if sequences_section_header
+            .symbol_compression_modes
+            .match_lengths_mode()
+            != CompressionMode::PredefinedMode
+        {
+            todo!();
+        }
+
+        for _ in 0..sequences_section_header.number_of_sequences {}
+
+        todo!("{:x?}", bytes);
+    }
+
+    fn literals_length_code(literals_length_code: u8) -> (u32, u8) {
+        match literals_length_code {
+            0..=15 => (literals_length_code as u32, 0),
+            16 => (16, 1),
+            17 => (18, 1),
+            18 => (20, 1),
+            19 => (22, 1),
+            20 => (24, 2),
+            21 => (28, 2),
+            22 => (32, 3),
+            23 => (40, 3),
+            24 => (48, 4),
+            25 => (64, 6),
+            26 => (128, 7),
+            27 => (256, 8),
+            28 => (512, 9),
+            29 => (1024, 10),
+            30 => (2048, 11),
+            31 => (4096, 12),
+            32 => (8192, 13),
+            33 => (16384, 14),
+            34 => (32768, 15),
+            35 => (65536, 16),
+            _ => panic!("impossible literals_length_code"),
+        }
+    }
+
+    fn match_length_code(match_length_code: u8) -> (u32, u8) {
+        match match_length_code {
+            0..=31 => (match_length_code as u32 + 3, 0),
+            32 => (35, 1),
+            33 => (37, 1),
+            34 => (39, 1),
+            35 => (41, 1),
+            36 => (43, 2),
+            37 => (47, 2),
+            38 => (51, 3),
+            39 => (59, 3),
+            40 => (67, 4),
+            41 => (83, 4),
+            42 => (99, 5),
+            43 => (131, 7),
+            44 => (259, 8),
+            45 => (515, 9),
+            46 => (1027, 10),
+            47 => (2051, 11),
+            48 => (4099, 12),
+            49 => (8195, 13),
+            50 => (16387, 14),
+            51 => (32771, 15),
+            52 => (65539, 16),
+            _ => panic!("impossible literals_length_code"),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct SequencesSectionHeader {
+    number_of_sequences: u16,
+    number_of_sequences_size: usize,
+    symbol_compression_modes: SymbolCompressionModes,
+}
+
+impl SequencesSectionHeader {
+    fn from_bytes(mut bytes: &[u8]) -> Res<Self> {
+        let number_of_sequences = Self::number_of_sequences(bytes);
+        let number_of_sequences_size = Self::number_of_sequences_size(bytes[0]);
+        bytes = &bytes[number_of_sequences_size..];
+        let symbol_compression_modes = SymbolCompressionModes::new(bytes[0]);
+        Ok(Self {
+            number_of_sequences,
+            number_of_sequences_size,
+            symbol_compression_modes,
+        })
+    }
+
+    fn number_of_sequences(bytes: &[u8]) -> u16 {
+        if bytes[0] == 0 {
+            0
+        } else if bytes[0] < 128 {
+            bytes[0].into()
+        } else if bytes[0] < 255 {
+            ((bytes[0] as u16 - 128) << 8) + bytes[1] as u16
+        } else {
+            (bytes[1] as u16) << 8 + bytes[2] as u16
+        }
+    }
+
+    fn number_of_sequences_size(byte: u8) -> usize {
+        if byte == 0 {
+            0
+        } else if byte < 128 {
+            1
+        } else if byte < 255 {
+            2
+        } else {
+            3
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.number_of_sequences_size + 1
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+enum CompressionMode {
+    PredefinedMode,
+    RleMode,
+    FseCompressedMode,
+    RepeatMode,
+}
+
+#[derive(Debug)]
+struct SymbolCompressionModes(u8);
+
+impl SymbolCompressionModes {
+    fn new(byte: u8) -> Self {
+        let s = Self(byte);
+        assert_eq!(s.reserved(), 0);
+        debug!(
+            "literal lengths {:?}, offsets {:?} match lengths {:?}",
+            s.literal_lengths_mode(),
+            s.offsets_mode(),
+            s.match_lengths_mode()
+        );
+        s
+    }
+
+    fn get_2_bits(&self, n: u8) -> u8 {
+        (self.0 >> n) & 0b11
+    }
+
+    fn get_compression_mode(&self, n: u8) -> CompressionMode {
+        match self.get_2_bits(n) {
+            0 => CompressionMode::PredefinedMode,
+            1 => CompressionMode::RleMode,
+            2 => CompressionMode::FseCompressedMode,
+            3 => CompressionMode::RepeatMode,
+            _ => panic!("impossible compression mode"),
+        }
+    }
+
+    fn literal_lengths_mode(&self) -> CompressionMode {
+        self.get_compression_mode(6)
+    }
+
+    fn offsets_mode(&self) -> CompressionMode {
+        self.get_compression_mode(4)
+    }
+
+    fn match_lengths_mode(&self) -> CompressionMode {
+        self.get_compression_mode(2)
+    }
+
+    fn reserved(&self) -> u8 {
+        self.get_2_bits(0)
+    }
+}

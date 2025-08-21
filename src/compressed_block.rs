@@ -2,20 +2,6 @@ use log::debug;
 
 use crate::Res;
 
-const LITERALS_LENGTH_DEFAULT_DISTRIBUTION: [i8; 36] = [
-    4, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 1, 1, 1, 1, 1,
-    -1, -1, -1, -1,
-];
-
-const MATCH_LENGTHS_DEFAULT_DISTRIBUTION: [i8; 53] = [
-    1, 4, 3, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1,
-];
-
-const OFFSET_CODES_DEFAULT_DISTRIBUTION: [i8; 29] = [
-    1, 1, 1, 1, 1, 1, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1,
-];
-
 #[derive(Debug)]
 pub struct CompressedBlock {
     literals_section: LiteralsSection,

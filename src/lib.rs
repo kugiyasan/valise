@@ -3,6 +3,7 @@
 mod block;
 mod compressed_block;
 mod frame;
+mod fse;
 
 use crate::frame::Frame;
 

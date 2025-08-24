@@ -34,9 +34,11 @@ impl FseDecodingTableEntry {
 #[derive(Debug, PartialEq, Eq)]
 pub struct FseDecodingTable {
     entries: Vec<FseDecodingTableEntry>,
+    accuracy_log: u8,
 }
 
 impl FseDecodingTable {
+    #[cfg(test)]
     fn new(table: &[(u8, u8, u8)]) -> Self {
         let entries = table
             .iter()
@@ -47,11 +49,17 @@ impl FseDecodingTable {
             })
             .collect();
 
-        Self { entries }
+        let biggest_symbol = table.iter().map(|row| row.0).max().unwrap();
+        let accuracy_log = (biggest_symbol.ilog2() + 1) as u8;
+
+        Self {
+            entries,
+            accuracy_log,
+        }
     }
 
     pub fn from_distribution(distribution: &[i8]) -> Self {
-        let accuracy_log = ((distribution.len() - 1).ilog2() + 1) as u8;
+        let accuracy_log = (distribution.len().ilog2() + 1) as u8;
         let table_size = 1 << accuracy_log;
         let mut symbols = vec![None; table_size];
         debug!("accuracy_log {}", accuracy_log);
@@ -103,7 +111,7 @@ impl FseDecodingTable {
                 continue;
             }
 
-            let next_power_of_2 = 1 << (probability * 2 - 1).ilog2();
+            let next_power_of_2 = 1 << (probability.ilog2() + 1);
             let doubles = next_power_of_2 - probability;
             let width_size = (table_size / next_power_of_2).ilog2();
 
@@ -129,7 +137,10 @@ impl FseDecodingTable {
         }
 
         // debug!("{:?}", entries);
-        Self { entries }
+        Self {
+            entries,
+            accuracy_log,
+        }
     }
 
     pub fn literals_length_default_distribution() -> Self {
@@ -143,11 +154,26 @@ impl FseDecodingTable {
     pub fn offset_codes_default_distribution() -> Self {
         Self::from_distribution(&OFFSET_CODES_DEFAULT_DISTRIBUTION)
     }
+
+    pub fn accuracy_log(&self) -> u8 {
+        self.accuracy_log
+    }
+}
+
+pub struct FseDecoder {
+    table: FseDecodingTable,
+    state: u8,
+}
+
+impl FseDecoder {
+    pub fn new(table: FseDecodingTable, state: u8) -> Self {
+        Self { table, state }
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::fse::FseDecodingTable;
+    use super::*;
 
     const EXPECTED_LITERALS_LENGTH_CODE_TABLE: [(u8, u8, u8); 65] = [
         (0, 0, 0),

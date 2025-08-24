@@ -1,6 +1,10 @@
 use log::debug;
 
-use crate::Res;
+use crate::{
+    Res,
+    bitstream::Bitstream,
+    fse::{FseDecoder, FseDecodingTable},
+};
 
 #[derive(Debug)]
 pub struct CompressedBlock {
@@ -221,6 +225,25 @@ impl SequencesSection {
         {
             todo!();
         }
+
+        let ll_table = FseDecodingTable::literals_length_default_distribution();
+        let ml_table = FseDecodingTable::match_lengths_default_distribution();
+        let of_table = FseDecodingTable::offset_codes_default_distribution();
+
+        let mut bs = Bitstream::new(bytes.iter().rev().map(|b| *b).collect());
+        debug!("{:02x?}", bytes.iter().rev().map(|b| *b).collect::<Vec<_>>());
+
+        let ll_init_state = bs.get_bits(ll_table.accuracy_log());
+        let ml_init_state = bs.get_bits(ml_table.accuracy_log());
+        let of_init_state = bs.get_bits(of_table.accuracy_log());
+
+        let ll = FseDecoder::new(ll_table, ll_init_state);
+        let ml = FseDecoder::new(ml_table, ml_init_state);
+        let of = FseDecoder::new(of_table, of_init_state);
+        debug!(
+            "init states: {}, {}, {}",
+            ll_init_state, ml_init_state, of_init_state
+        );
 
         for _ in 0..sequences_section_header.number_of_sequences {}
 

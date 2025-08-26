@@ -1,7 +1,7 @@
 use log::debug;
 
-use crate::Res;
 use crate::block::Block;
+use crate::Res;
 
 pub const MAGIC_NUMBER: u32 = 0xFD2FB528;
 
@@ -73,8 +73,7 @@ impl Frame {
     pub fn decode(self) -> Vec<u8> {
         self.data_blocks
             .into_iter()
-            .map(|block| block.decode())
-            .flatten()
+            .flat_map(|block| block.decode())
             .collect()
     }
 }

@@ -20,7 +20,7 @@ impl Zstd {
         let mut bytes: &[u8] = &bytes;
 
         while !bytes.is_empty() {
-            let frame = Frame::from_bytes(&bytes)?;
+            let frame = Frame::from_bytes(bytes)?;
             bytes = &bytes[frame.len()..];
             frames.push(frame);
         }
@@ -28,15 +28,14 @@ impl Zstd {
         Ok(Self { frames })
     }
 
-    pub fn encode(bytes: Vec<u8>) -> Vec<u8> {
+    pub fn encode(_bytes: Vec<u8>) -> Vec<u8> {
         todo!();
     }
 
     pub fn decode(self) -> Vec<u8> {
         self.frames
             .into_iter()
-            .map(|frame| frame.decode())
-            .flatten()
+            .flat_map(|frame| frame.decode())
             .collect()
     }
 }

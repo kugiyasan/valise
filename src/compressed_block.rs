@@ -1,9 +1,9 @@
 use log::debug;
 
 use crate::{
-    Res,
     bitstream::Bitstream,
     fse::{FseDecoder, FseDecodingTable},
+    Res,
 };
 
 #[derive(Debug)]
@@ -104,7 +104,7 @@ impl LiteralsSection {
         bytes = &bytes[lsh.header_len..];
 
         match literals_block_type {
-            LiteralsBlockType::RawLiteralsBlock => {
+            LiteralsBlockType::Raw => {
                 let stream = bytes[..lsh.regenerated_size as usize].into();
                 Ok(Self {
                     literals_section_header: lsh,
@@ -113,16 +113,16 @@ impl LiteralsSection {
                     streams: Streams::One(stream),
                 })
             }
-            LiteralsBlockType::RleLiteralsBlock => Ok(Self {
+            LiteralsBlockType::Rle => Ok(Self {
                 literals_section_header: lsh,
                 huffman_tree_description: None,
                 jump_table: None,
                 streams: Streams::One(bytes[..1].into()),
             }),
-            LiteralsBlockType::CompressedLiteralsBlock => {
+            LiteralsBlockType::Compressed => {
                 todo!();
             }
-            LiteralsBlockType::TreelessLiteralsBlock => {
+            LiteralsBlockType::Treeless => {
                 todo!();
             }
         }
@@ -139,10 +139,10 @@ impl LiteralsSection {
 
 #[derive(Debug, PartialEq, Eq)]
 enum LiteralsBlockType {
-    RawLiteralsBlock,
-    RleLiteralsBlock,
-    CompressedLiteralsBlock,
-    TreelessLiteralsBlock,
+    Raw,
+    Rle,
+    Compressed,
+    Treeless,
 }
 
 #[derive(Debug)]
@@ -177,10 +177,10 @@ impl LiteralsSectionHeader {
 
     fn literals_block_type(byte: u8) -> LiteralsBlockType {
         match byte & 0b11 {
-            0 => LiteralsBlockType::RawLiteralsBlock,
-            1 => LiteralsBlockType::RleLiteralsBlock,
-            2 => LiteralsBlockType::CompressedLiteralsBlock,
-            3 => LiteralsBlockType::TreelessLiteralsBlock,
+            0 => LiteralsBlockType::Raw,
+            1 => LiteralsBlockType::Rle,
+            2 => LiteralsBlockType::Compressed,
+            3 => LiteralsBlockType::Treeless,
             _ => panic!("impossible literals_block_type"),
         }
     }
@@ -191,8 +191,8 @@ impl LiteralsSectionHeader {
 
     fn is_one_stream(byte: u8) -> bool {
         let t = Self::literals_block_type(byte);
-        t == LiteralsBlockType::RawLiteralsBlock
-            || t == LiteralsBlockType::RleLiteralsBlock
+        t == LiteralsBlockType::Raw
+            || t == LiteralsBlockType::Rle
             || Self::size_format(byte) == 0b00
     }
 
@@ -203,20 +203,17 @@ impl LiteralsSectionHeader {
         let bytes = bytes.iter().map(|b| *b as u32).collect::<Vec<_>>();
 
         match literals_block_type {
-            LiteralsBlockType::RawLiteralsBlock | LiteralsBlockType::RleLiteralsBlock => {
-                match size_format {
-                    0b00 | 0b10 => Self::new(bytes[0] >> 3, None, 1),
-                    0b01 => Self::new((bytes[0] >> 4) + (bytes[1] << 4), None, 2),
-                    0b11 => Self::new(
-                        (bytes[0] >> 4) + (bytes[1] << 4) + (bytes[2] << 12),
-                        None,
-                        3,
-                    ),
-                    _ => panic!("impossible size_format"),
-                }
-            }
-            LiteralsBlockType::CompressedLiteralsBlock
-            | LiteralsBlockType::TreelessLiteralsBlock => match size_format {
+            LiteralsBlockType::Raw | LiteralsBlockType::Rle => match size_format {
+                0b00 | 0b10 => Self::new(bytes[0] >> 3, None, 1),
+                0b01 => Self::new((bytes[0] >> 4) + (bytes[1] << 4), None, 2),
+                0b11 => Self::new(
+                    (bytes[0] >> 4) + (bytes[1] << 4) + (bytes[2] << 12),
+                    None,
+                    3,
+                ),
+                _ => panic!("impossible size_format"),
+            },
+            LiteralsBlockType::Compressed | LiteralsBlockType::Treeless => match size_format {
                 0b00 | 0b01 => Self::new(
                     (bytes[0] >> 4) + ((bytes[1] & 0b111111) << 4),
                     Some((bytes[1] >> 6) + (bytes[2] << 2)),
@@ -257,7 +254,7 @@ impl SequencesSection {
         if sequences_section_header
             .symbol_compression_modes
             .literal_lengths_mode()
-            != CompressionMode::PredefinedMode
+            != CompressionMode::Predefined
         {
             todo!();
         }
@@ -265,7 +262,7 @@ impl SequencesSection {
         if sequences_section_header
             .symbol_compression_modes
             .offsets_mode()
-            != CompressionMode::PredefinedMode
+            != CompressionMode::Predefined
         {
             todo!();
         }
@@ -273,7 +270,7 @@ impl SequencesSection {
         if sequences_section_header
             .symbol_compression_modes
             .match_lengths_mode()
-            != CompressionMode::PredefinedMode
+            != CompressionMode::Predefined
         {
             todo!();
         }
@@ -282,11 +279,9 @@ impl SequencesSection {
         let ml_table = FseDecodingTable::match_lengths_default_distribution();
         let of_table = FseDecodingTable::offset_codes_default_distribution();
 
-        let mut bs = Bitstream::new(bytes.iter().rev().map(|b| *b).collect());
-        debug!(
-            "{:02x?}",
-            bytes.iter().rev().map(|b| *b).collect::<Vec<_>>()
-        );
+        let bytes = bytes.iter().rev().copied().collect::<Vec<_>>();
+        debug!("{:02x?}", bytes);
+        let mut bs = Bitstream::new(bytes);
 
         let ll_init_state = bs.get_bits(ll_table.accuracy_log());
         let of_init_state = bs.get_bits(of_table.accuracy_log());
@@ -315,7 +310,7 @@ impl SequencesSection {
             let (baseline, num_bits) = Self::match_length_code(ml_code);
             let ml = baseline + bs.get_bits(num_bits) as u32;
 
-            let mut of = (1 << of_code) + bs.get_bits(of_code) as u32;
+            let of = (1 << of_code) + bs.get_bits(of_code) as u32;
 
             sequences.push(Sequence { ll, ml, of });
 
@@ -421,7 +416,7 @@ impl SequencesSectionHeader {
         } else if bytes[0] < 255 {
             ((bytes[0] as u16 - 128) << 8) + bytes[1] as u16
         } else {
-            (bytes[1] as u16) << 8 + bytes[2] as u16
+            (bytes[1] as u16) << (8 + bytes[2] as u16)
         }
     }
 
@@ -444,10 +439,10 @@ impl SequencesSectionHeader {
 
 #[derive(Debug, PartialEq, Eq)]
 enum CompressionMode {
-    PredefinedMode,
-    RleMode,
-    FseCompressedMode,
-    RepeatMode,
+    Predefined,
+    Rle,
+    FseCompressed,
+    Repeat,
 }
 
 #[derive(Debug)]
@@ -472,10 +467,10 @@ impl SymbolCompressionModes {
 
     fn get_compression_mode(&self, n: u8) -> CompressionMode {
         match self.get_2_bits(n) {
-            0 => CompressionMode::PredefinedMode,
-            1 => CompressionMode::RleMode,
-            2 => CompressionMode::FseCompressedMode,
-            3 => CompressionMode::RepeatMode,
+            0 => CompressionMode::Predefined,
+            1 => CompressionMode::Rle,
+            2 => CompressionMode::FseCompressed,
+            3 => CompressionMode::Repeat,
             _ => panic!("impossible compression mode"),
         }
     }

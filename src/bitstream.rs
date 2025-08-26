@@ -19,7 +19,7 @@ impl Bitstream {
         }
 
         if n > 64 {
-            todo!("{} bytes to read", n);
+            panic!("too many bytes to read: {} bytes", n);
         }
 
         if self.current_bit == 0 {
@@ -37,8 +37,7 @@ impl Bitstream {
             return Self::get_bits_range(self.bytes[i], used_bits_len, n) as u64;
         }
 
-        let mut result =
-            Self::get_bits_range(self.bytes[i], used_bits_len, unused_bits_len as u8) as u64;
+        let mut result = Self::get_bits_range(self.bytes[i], used_bits_len, unused_bits_len) as u64;
         n -= unused_bits_len;
         while n > 8 {
             result = (result << 8) + self.bytes[i] as u64;

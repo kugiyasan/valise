@@ -202,7 +202,6 @@ impl FseDecoder {
     pub fn baseline(&self) -> u8 {
         self.table.entries[self.state as usize].baseline
     }
-
 }
 
 #[cfg(test)]

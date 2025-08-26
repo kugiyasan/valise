@@ -19,6 +19,8 @@ impl CompressedBlock {
         bytes = &bytes[literals_section.len()..];
 
         let sequences_section = SequencesSection::from_bytes(bytes)?;
+        debug!("Sequences {:?}", sequences_section.sequences);
+
         todo!();
     }
 }
@@ -190,6 +192,7 @@ impl LiteralsSectionHeader {
 #[derive(Debug)]
 struct SequencesSection {
     sequences_section_header: SequencesSectionHeader,
+    sequences: Vec<Sequence>,
 }
 
 impl SequencesSection {
@@ -231,23 +234,50 @@ impl SequencesSection {
         let of_table = FseDecodingTable::offset_codes_default_distribution();
 
         let mut bs = Bitstream::new(bytes.iter().rev().map(|b| *b).collect());
-        debug!("{:02x?}", bytes.iter().rev().map(|b| *b).collect::<Vec<_>>());
+        debug!(
+            "{:02x?}",
+            bytes.iter().rev().map(|b| *b).collect::<Vec<_>>()
+        );
 
         let ll_init_state = bs.get_bits(ll_table.accuracy_log());
-        let ml_init_state = bs.get_bits(ml_table.accuracy_log());
         let of_init_state = bs.get_bits(of_table.accuracy_log());
+        let ml_init_state = bs.get_bits(ml_table.accuracy_log());
 
-        let ll = FseDecoder::new(ll_table, ll_init_state);
-        let ml = FseDecoder::new(ml_table, ml_init_state);
-        let of = FseDecoder::new(of_table, of_init_state);
+        let ll_decoder = FseDecoder::new(ll_table, ll_init_state as u8);
+        let ml_decoder = FseDecoder::new(ml_table, ml_init_state as u8);
+        let of_decoder = FseDecoder::new(of_table, of_init_state as u8);
         debug!(
             "init states: {}, {}, {}",
             ll_init_state, ml_init_state, of_init_state
         );
 
-        for _ in 0..sequences_section_header.number_of_sequences {}
+        let mut sequences =
+            Vec::with_capacity(sequences_section_header.number_of_sequences as usize);
 
-        todo!("{:02x?}", bytes);
+        for _ in 0..sequences_section_header.number_of_sequences {
+            let ll_code = ll_decoder.symbol();
+            let ml_code = ml_decoder.symbol();
+            let of_code = of_decoder.symbol();
+            debug!("codes: {}, {}, {}", ll_code, ml_code, of_code);
+
+            let (baseline, num_bits) = Self::literals_length_code(ll_code);
+            let ll = baseline + bs.get_bits(num_bits) as u32;
+
+            let (baseline, num_bits) = Self::match_length_code(ml_code);
+            let ml = baseline + bs.get_bits(num_bits) as u32;
+
+            let mut of = (1 << of_code) + bs.get_bits(of_code) as u32;
+            if of > 3 {
+                of -= 3;
+            }
+
+            sequences.push(Sequence { ll, ml, of });
+        }
+
+        Ok(Self {
+            sequences_section_header,
+            sequences,
+        })
     }
 
     fn literals_length_code(literals_length_code: u8) -> (u32, u8) {
@@ -408,4 +438,11 @@ impl SymbolCompressionModes {
     fn reserved(&self) -> u8 {
         self.get_2_bits(0)
     }
+}
+
+#[derive(Debug)]
+struct Sequence {
+    ll: u32,
+    ml: u32,
+    of: u32,
 }

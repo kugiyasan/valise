@@ -1,4 +1,4 @@
-use log::debug;
+use std::fmt::Debug;
 
 const LITERALS_LENGTH_DEFAULT_DISTRIBUTION: [i8; 36] = [
     4, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 2, 1, 1, 1, 1, 1,
@@ -31,7 +31,7 @@ impl FseDecodingTableEntry {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct FseDecodingTable {
     entries: Vec<FseDecodingTableEntry>,
     accuracy_log: u8,
@@ -62,7 +62,6 @@ impl FseDecodingTable {
         let accuracy_log = (distribution.len().ilog2() + 1) as u8;
         let table_size = 1 << accuracy_log;
         let mut symbols = vec![None; table_size];
-        debug!("accuracy_log {}", accuracy_log);
 
         let mut last_index = symbols.len() - 1;
         for (i, n) in distribution.iter().enumerate() {
@@ -160,6 +159,24 @@ impl FseDecodingTable {
     }
 }
 
+impl Debug for FseDecodingTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FseDecodingTable")
+            .field("accuracy_log", &self.accuracy_log)
+            .field(
+                "entries",
+                &self
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| (i, e.symbol, e.num_bits, e.baseline))
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
+
+#[derive(Debug)]
 pub struct FseDecoder {
     table: FseDecodingTable,
     state: u8,
@@ -169,6 +186,19 @@ impl FseDecoder {
     pub fn new(table: FseDecodingTable, state: u8) -> Self {
         Self { table, state }
     }
+
+    pub fn symbol(&self) -> u8 {
+        self.table.entries[self.state as usize].symbol
+    }
+
+    pub fn num_bits(&self) -> u8 {
+        self.table.entries[self.state as usize].num_bits
+    }
+
+    pub fn baseline(&self) -> u8 {
+        self.table.entries[self.state as usize].baseline
+    }
+
 }
 
 #[cfg(test)]

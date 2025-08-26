@@ -187,6 +187,10 @@ impl FseDecoder {
         Self { table, state }
     }
 
+    pub fn set_state(&mut self, state: u8) {
+        self.state = state % self.table.entries.len() as u8;
+    }
+
     pub fn symbol(&self) -> u8 {
         self.table.entries[self.state as usize].symbol
     }

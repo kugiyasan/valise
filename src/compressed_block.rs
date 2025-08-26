@@ -21,7 +21,56 @@ impl CompressedBlock {
         let sequences_section = SequencesSection::from_bytes(bytes)?;
         debug!("Sequences {:?}", sequences_section.sequences);
 
-        todo!();
+        Ok(Self {
+            literals_section,
+            sequences_section,
+        })
+    }
+
+    pub fn sequence_execution(&mut self) -> Vec<u8> {
+        let mut repeated_offsets = [1, 4, 8];
+        let mut output = vec![];
+
+        for sequence in &self.sequences_section.sequences {
+            match &mut self.literals_section.streams {
+                Streams::One(items) => {
+                    let ll = sequence.ll as usize;
+                    output.extend_from_slice(&items[..ll]);
+                    *items = Vec::from(&items[ll..]);
+                }
+                Streams::Four(_) => todo!(),
+            };
+
+            let offset_value = match sequence.of {
+                0 => unreachable!(),
+                1 => repeated_offsets[0],
+                2 => {
+                    (repeated_offsets[0], repeated_offsets[1]) =
+                        (repeated_offsets[1], repeated_offsets[0]);
+                    repeated_offsets[0]
+                }
+                3 => {
+                    let n = repeated_offsets[2];
+                    repeated_offsets[2] = repeated_offsets[1];
+                    repeated_offsets[1] = repeated_offsets[0];
+                    repeated_offsets[0] = n;
+                    n
+                }
+                n => {
+                    repeated_offsets[2] = repeated_offsets[1];
+                    repeated_offsets[1] = repeated_offsets[0];
+                    repeated_offsets[0] = n - 3;
+                    n - 3
+                }
+            };
+
+            let index = output.len() - 1 - offset_value as usize;
+            for _ in 0..sequence.ml {
+                output.push(output[index]);
+            }
+        }
+
+        output
     }
 }
 
@@ -243,9 +292,9 @@ impl SequencesSection {
         let of_init_state = bs.get_bits(of_table.accuracy_log());
         let ml_init_state = bs.get_bits(ml_table.accuracy_log());
 
-        let ll_decoder = FseDecoder::new(ll_table, ll_init_state as u8);
-        let ml_decoder = FseDecoder::new(ml_table, ml_init_state as u8);
-        let of_decoder = FseDecoder::new(of_table, of_init_state as u8);
+        let mut ll_decoder = FseDecoder::new(ll_table, ll_init_state as u8);
+        let mut ml_decoder = FseDecoder::new(ml_table, ml_init_state as u8);
+        let mut of_decoder = FseDecoder::new(of_table, of_init_state as u8);
         debug!(
             "init states: {}, {}, {}",
             ll_init_state, ml_init_state, of_init_state
@@ -254,7 +303,7 @@ impl SequencesSection {
         let mut sequences =
             Vec::with_capacity(sequences_section_header.number_of_sequences as usize);
 
-        for _ in 0..sequences_section_header.number_of_sequences {
+        for i in 0..sequences_section_header.number_of_sequences {
             let ll_code = ll_decoder.symbol();
             let ml_code = ml_decoder.symbol();
             let of_code = of_decoder.symbol();
@@ -267,11 +316,19 @@ impl SequencesSection {
             let ml = baseline + bs.get_bits(num_bits) as u32;
 
             let mut of = (1 << of_code) + bs.get_bits(of_code) as u32;
-            if of > 3 {
-                of -= 3;
-            }
 
             sequences.push(Sequence { ll, ml, of });
+
+            if i != sequences_section_header.number_of_sequences - 1 {
+                let ll_state = ll_decoder.baseline() + bs.get_bits(ll_decoder.num_bits()) as u8;
+                ll_decoder.set_state(ll_state);
+
+                let ml_state = ml_decoder.baseline() + bs.get_bits(ml_decoder.num_bits()) as u8;
+                ml_decoder.set_state(ml_state);
+
+                let of_state = of_decoder.baseline() + bs.get_bits(of_decoder.num_bits()) as u8;
+                of_decoder.set_state(of_state);
+            }
         }
 
         Ok(Self {
